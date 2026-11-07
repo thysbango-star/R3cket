@@ -32,6 +32,10 @@ best picture your laptop can afford:
   Resolution (RX 5000+ / Ryzen 6000+ graphics) or Radeon Image Sharpening,
   [Magpie](https://github.com/Blinue/Magpie) (free, great on Intel) and Lossless
   Scaling.
+- **Intel graphics extras** — flags single-channel memory (Intel graphics borrow
+  your RAM, so a second matching stick can be a huge upgrade), Intel Retro
+  (integer) Scaling on Iris Plus / Iris Xe / Arc, XeSS vs FSR guidance, and the
+  Intel driver's maximum-performance power setting.
 - **Which settings to sacrifice first** — shadows, volumetrics, AA and AO cost
   the most FPS for the least visible difference; textures and anisotropic
   filtering are nearly free and keep games looking good.

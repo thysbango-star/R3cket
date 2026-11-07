@@ -33,6 +33,7 @@ class GpuProfile:
     amd: bool = False
     amd_rsr: bool = False  # RX 5000+ or Ryzen 6000+ graphics
     intel_only: bool = False
+    intel_gen11_plus: bool = False  # Iris Plus / Iris Xe / Arc: has Retro (integer) Scaling
 
 
 def profile_gpu(info: SystemInfo) -> GpuProfile:
@@ -56,7 +57,10 @@ def profile_gpu(info: SystemInfo) -> GpuProfile:
         return GpuProfile(INTEGRATED, names[lower.index(g)], amd=True,
                           amd_rsr=bool(_RDNA_IGPU.search(g)))
     if names:
-        return GpuProfile(INTEGRATED, names[0], intel_only=True)
+        g = lower[0]
+        modern = any(k in g for k in ("iris(r) plus", "iris plus", "iris(r) xe", "iris xe", "arc"))
+        tier = DEDICATED if "arc(tm) a" in g or re.search(r"arc\s*a\d", g) else INTEGRATED
+        return GpuProfile(tier, names[0], intel_only=True, intel_gen11_plus=modern)
     return GpuProfile(INTEGRATED, "Unknown graphics")
 
 
@@ -155,11 +159,16 @@ def upscalers_for(gpu: GpuProfile) -> list[Upscaler]:
     out: list[Upscaler] = []
 
     in_game = "FSR, XeSS" + (" or DLSS" if gpu.rtx else "")
+    intel_note = ""
+    if gpu.intel_only:
+        intel_note = (" On Intel graphics try both: XeSS is Intel's own and often looks "
+                      "sharper on Iris Xe/Arc, while FSR is usually lighter on older HD/UHD chips.")
     out.append(Upscaler(
         f"The game's own upscaler ({in_game})", "best",
         "Best quality, because the game feeds the upscaler extra information. Use it "
         "whenever the game has one." + (" DLSS usually looks best on your RTX GPU." if gpu.rtx
-                                         else " FSR and XeSS work on any graphics chip."),
+                                         else " FSR and XeSS work on any graphics chip.")
+        + intel_note,
         ["Open the game's Graphics / Display settings.",
          "Look for 'Upscaling', 'Super Resolution', 'FidelityFX', 'XeSS' or 'Resolution scale'.",
          "Pick Quality first; Balanced if you still need more FPS.",
@@ -198,6 +207,22 @@ def upscalers_for(gpu: GpuProfile) -> list[Upscaler]:
             ("AMD drivers", AMD_DRIVERS_URL),
         ))
 
+    if gpu.intel_only:
+        out.append(Upscaler(
+            "Intel Retro Scaling (integer scaling)", "alt",
+            "Scales the image by exact whole numbers, so pixels stay perfectly sharp - "
+            "e.g. 960x540 shown as crisp 2x on a 1080p screen. Great for pixel-art and "
+            "older games; for modern 3D games an FSR upscaler usually looks better. "
+            + ("Your Intel graphics supports it."
+               if gpu.intel_gen11_plus else
+               "Needs 10th-gen Ice Lake (Iris Plus) or newer Intel graphics - if you "
+               "don't see the option, your chip doesn't have it."),
+            ["Open Intel Graphics Command Center or Intel Graphics Software "
+             "(search the Start menu; install it from the Microsoft Store if missing).",
+             "Display > Scaling > Retro Scaling (or Integer Scaling).",
+             "In the game, pick exactly half your screen resolution, in fullscreen."],
+        ))
+
     out.append(Upscaler(
         "Magpie (free)", "good" if gpu.intel_only else "alt",
         "Free, open-source app that upscales any game running in windowed or borderless "
@@ -219,6 +244,57 @@ def upscalers_for(gpu: GpuProfile) -> list[Upscaler]:
         ("View on Steam", LOSSLESS_URL),
     ))
     return out
+
+
+# ---- Intel-specific tips ------------------------------------------------------
+
+INTEL_DRIVER_URL = ("https://www.intel.com/content/www/us/en/support/"
+                    "intel-driver-support-assistant.html")
+
+
+@dataclass
+class Tip:
+    title: str
+    detail: str
+    link: tuple[str, str] | None = None
+
+
+def intel_tips(gpu: GpuProfile, info: SystemInfo) -> list[Tip]:
+    """Things that matter specifically when gaming on Intel integrated graphics."""
+    if not gpu.intel_only:
+        return []
+    tips = []
+    integrated = gpu.tier == INTEGRATED  # Arc A-series cards have their own memory
+    if integrated and info.memory_modules == 1:
+        tips.append(Tip(
+            "Add a second memory stick (dual channel)",
+            "Intel graphics have no memory of their own - they borrow your RAM, so RAM "
+            "speed is graphics speed. Windows sees one module, so you're probably in single "
+            "channel. A matching second stick can be the biggest upgrade this laptop can get "
+            "for games (if it has a free slot - some have soldered memory)."))
+    elif integrated and info.memory_modules >= 2:
+        tips.append(Tip(
+            "Dual-channel memory: good",
+            f"Windows sees {info.memory_modules} memory modules"
+            + (f" at {info.ram_mhz} MHz" if info.ram_mhz else "")
+            + ", which is what Intel graphics need for full speed."))
+    tips.append(Tip(
+        "Set the Intel driver to maximum performance",
+        "In Intel Graphics Command Center (or Intel Graphics Software), look for "
+        "System > Power and set 'Plugged in' to Maximum Performance. By default the "
+        "driver may hold the graphics clock back to save power."))
+    tips.append(Tip(
+        "Use Intel's own driver, not just Windows Update's",
+        "Intel's newer drivers include game-specific fixes. Intel Driver & Support "
+        "Assistant finds the right one. Some laptop makers lock their custom driver - "
+        "if Intel's installer refuses, use the newest one from your laptop maker's site.",
+        ("Intel Driver Assistant", INTEL_DRIVER_URL)))
+    if integrated and info.ram_gb and info.ram_gb <= 8.5:
+        tips.append(Tip(
+            "Leave memory free for the graphics",
+            "Intel graphics carve their video memory out of your RAM, so every app you "
+            "close gives the game more. Let R3cket's boost close browsers before playing."))
+    return tips
 
 
 # ---- settings priority -------------------------------------------------------

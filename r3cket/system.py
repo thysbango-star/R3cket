@@ -15,9 +15,12 @@ $cs  = Get-CimInstance Win32_ComputerSystem
 $gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name })
 $disks = @(Get-PhysicalDisk | ForEach-Object { "$($_.MediaType)|$($_.BusType)|$($_.FriendlyName)" })
 $os = Get-CimInstance Win32_OperatingSystem
+$mem = @(Get-CimInstance Win32_PhysicalMemory)
+$speed = ($mem | Measure-Object -Property ConfiguredClockSpeed -Maximum).Maximum
 [pscustomobject]@{
   cpu = $cpu.Name; cores = $cpu.NumberOfCores; threads = $cpu.NumberOfLogicalProcessors
   ram = $cs.TotalPhysicalMemory; gpus = $gpus; disks = $disks; os = $os.Caption
+  modules = $mem.Count; ram_mhz = $speed
 } | ConvertTo-Json -Compress
 """
 
@@ -36,6 +39,8 @@ class SystemInfo:
     gpus: list[str] = field(default_factory=list)
     disks: list[str] = field(default_factory=list)
     os: str = ""
+    memory_modules: int = 0  # 0 = unknown
+    ram_mhz: int = 0
 
     @property
     def has_dedicated_gpu(self) -> bool:
@@ -76,6 +81,8 @@ def detect(backend: Backend) -> SystemInfo:
     disks = raw.get("disks") or []
     info.disks = [disks] if isinstance(disks, str) else list(disks)
     info.os = raw.get("os") or ""
+    info.memory_modules = int(raw.get("modules") or 0)
+    info.ram_mhz = int(raw.get("ram_mhz") or 0)
     return info
 
 
@@ -115,6 +122,15 @@ def advise(info: SystemInfo, plugged_in: bool | None) -> list[Advice]:
                           "Run games at 1280x720 (or use a render/resolution scale of "
                           "60-75%, or AMD FSR if the game has it). Turn off shadows, "
                           "anti-aliasing and motion blur first - they cost the most."))
+
+    if info.memory_modules == 1 and info.has_integrated_gpu and not info.has_dedicated_gpu:
+        out.append(Advice("big", "Your memory is probably running in single channel",
+                          "Windows sees only one memory module. Integrated graphics use your "
+                          "RAM as video memory, so a single stick can cost them a big chunk "
+                          "of performance. If your laptop has a free memory slot, adding a "
+                          "matching second stick (same size and speed) is one of the "
+                          "cheapest, biggest upgrades you can make. Some laptops have "
+                          "memory soldered on - check your model before buying."))
 
     if info.ram_gb and info.ram_gb <= 4.5:
         out.append(Advice("big", f"Only {info.ram_gb:g} GB of RAM",

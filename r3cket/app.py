@@ -259,6 +259,21 @@ class R3cketApp:
                  anchor="w", justify="left", wraplength=700).pack(fill="x")
         muted(body, render.detail, bg=PANEL_2, width=700)
 
+        tips = graphics.intel_tips(gpu, info)
+        if tips:
+            heading("Intel graphics: extra wins")
+            for tip in tips:
+                c = tk.Frame(inner, bg=PANEL_2, padx=12, pady=10)
+                c.pack(fill="x", pady=4)
+                top = tk.Frame(c, bg=PANEL_2)
+                top.pack(fill="x")
+                tk.Label(top, text=tip.title, font=FONT_BOLD, fg=TEXT, bg=PANEL_2,
+                         anchor="w").pack(side="left")
+                if tip.link:
+                    text, url = tip.link
+                    _button(top, text, lambda u=url: webbrowser.open(u)).pack(side="right")
+                muted(c, tip.detail, bg=PANEL_2, width=700)
+
         heading("Upscaling & sharpening for your laptop")
         rank_text = {"best": ("BEST", GOOD), "good": ("GOOD", WARN), "alt": ("ALSO", MUTED)}
         for up in graphics.upscalers_for(gpu):

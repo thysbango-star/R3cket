@@ -1,7 +1,8 @@
 import unittest
 
-from r3cket.graphics import (DEDICATED, ENTRY, INTEGRATED, profile_gpu, render_advice,
-                             settings_guide, upscalers_for)
+from r3cket.graphics import (DEDICATED, ENTRY, INTEGRATED, intel_tips, profile_gpu,
+                             render_advice, settings_guide, upscalers_for)
+from r3cket.system import advise
 from r3cket.system import SystemInfo
 
 
@@ -54,6 +55,33 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(tips[0].setting, "Shadows")
         tex = next(t for t in tips if t.setting == "Texture quality")
         self.assertIn("Medium", tex.action)
+
+
+class IntelTests(unittest.TestCase):
+    def test_generations(self):
+        self.assertTrue(gpu("Intel(R) Iris(R) Xe Graphics").intel_gen11_plus)
+        self.assertTrue(gpu("Intel(R) Iris(R) Plus Graphics").intel_gen11_plus)
+        self.assertFalse(gpu("Intel(R) UHD Graphics 620").intel_gen11_plus)
+        self.assertEqual(gpu("Intel(R) Arc(TM) A370M Graphics").tier, DEDICATED)
+        self.assertEqual(gpu("Intel(R) Arc(TM) Graphics").tier, INTEGRATED)
+
+    def test_retro_scaling_and_xess_note(self):
+        ups = upscalers_for(gpu("Intel(R) HD Graphics 620"))
+        retro = next(u for u in ups if "Retro" in u.name)
+        self.assertIn("Needs 10th-gen", retro.summary)
+        self.assertIn("XeSS is Intel's own", ups[0].summary)
+        self.assertNotIn("Retro", " ".join(u.name for u in upscalers_for(gpu("NVIDIA GeForce GTX 1650"))))
+
+    def test_single_channel_flagged(self):
+        info = SystemInfo(gpus=["Intel(R) UHD Graphics 620"], ram_gb=8, memory_modules=1)
+        tips = intel_tips(profile_gpu(info), info)
+        self.assertIn("dual channel", tips[0].title)
+        self.assertIn("single channel", " ".join(a.title for a in advise(info, True)))
+        two = SystemInfo(gpus=["Intel(R) UHD Graphics 620"], ram_gb=8, memory_modules=2, ram_mhz=2400)
+        self.assertIn("good", intel_tips(profile_gpu(two), two)[0].title)
+        arc = SystemInfo(gpus=["Intel(R) Arc(TM) A370M Graphics"], memory_modules=1)
+        self.assertNotIn("dual", " ".join(t.title for t in intel_tips(profile_gpu(arc), arc)))
+        self.assertEqual(intel_tips(gpu("NVIDIA GeForce GTX 1650"), SystemInfo()), [])
 
 
 if __name__ == "__main__":
