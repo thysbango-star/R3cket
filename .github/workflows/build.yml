@@ -1,0 +1,44 @@
+name: Build R3cket.exe
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Run tests
+        run: python -m unittest -v
+
+      - name: Check the app starts (imports and builds its window)
+        run: |
+          python -c "import tkinter as tk; from r3cket.app import R3cketApp; r = tk.Tk(); R3cketApp(r); r.update(); r.destroy(); print('UI OK')"
+
+      - name: Build exe
+        run: python -m PyInstaller --noconfirm --onefile --windowed --name R3cket R3cket.pyw
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: R3cket-windows
+          path: dist/R3cket.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/R3cket.exe --title "R3cket ${{ github.ref_name }}" --notes "Download R3cket.exe and double-click to run. Windows may show a SmartScreen warning because the app isn't code-signed - click 'More info' then 'Run anyway'."
