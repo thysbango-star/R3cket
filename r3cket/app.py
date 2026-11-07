@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import queue
 import threading
+import webbrowser
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, processes, system
+from . import __version__, graphics, processes, system
 from .engine import BoostSession, Optimizer
 from .platform_win import default_backend, is_windows
 from .state import State
@@ -142,15 +143,18 @@ class R3cketApp:
         nb.pack(fill="both", expand=True, padx=12, pady=(4, 0))
         self.tab_launch = ttk.Frame(nb, style="Panel.TFrame")
         self.tab_games = ttk.Frame(nb, style="Panel.TFrame")
+        self.tab_graphics = ttk.Frame(nb, style="Panel.TFrame")
         self.tab_tweaks = ttk.Frame(nb, style="Panel.TFrame")
         self.tab_system = ttk.Frame(nb, style="Panel.TFrame")
         nb.add(self.tab_launch, text="  Launch  ")
         nb.add(self.tab_games, text="  Games  ")
+        nb.add(self.tab_graphics, text="  Graphics  ")
         nb.add(self.tab_tweaks, text="  Tweaks  ")
         nb.add(self.tab_system, text="  My laptop  ")
 
         self._build_launch()
         self._build_games()
+        self._build_graphics()
         self._build_tweaks()
         self._build_system()
 
@@ -213,6 +217,88 @@ class R3cketApp:
         self.play_btn.pack(side="left")
         _button(btns, "Add game...", self.on_add_game).pack(side="left", padx=8)
         _button(btns, "Remove", self.on_remove_game).pack(side="left")
+
+    def _build_graphics(self) -> None:
+        box, _ = _scrollable(self.tab_graphics)
+        box.pack(fill="both", expand=True, padx=20, pady=20)
+        self.gfx_inner = box.inner
+        tk.Label(self.gfx_inner, text="Checking your graphics...", font=FONT, fg=MUTED,
+                 bg=PANEL, anchor="w").pack(fill="x")
+
+    def _show_graphics(self, info) -> None:
+        inner = self.gfx_inner
+        for child in inner.winfo_children():
+            child.destroy()
+        gpu = graphics.profile_gpu(info)
+        screen = graphics.screen_resolution()
+        render = graphics.render_advice(gpu, screen)
+
+        def heading(text, top=16):
+            tk.Label(inner, text=text, font=FONT_H2, fg=TEXT, bg=PANEL,
+                     anchor="w").pack(fill="x", pady=(top, 4))
+
+        def muted(parent, text, bg=PANEL, width=740):
+            tk.Label(parent, text=text, font=FONT_SMALL, fg=MUTED, bg=bg, anchor="w",
+                     justify="left", wraplength=width).pack(fill="x")
+
+        heading("Better graphics on old hardware", top=0)
+        tier_words = {graphics.INTEGRATED: "integrated graphics",
+                      graphics.ENTRY: "an entry-level graphics card",
+                      graphics.DEDICATED: "a dedicated graphics card"}
+        scr = f" on a {screen[0]}x{screen[1]} screen" if screen else ""
+        muted(inner, f"You have {gpu.name} ({tier_words[gpu.tier]}){scr}. The trick is to "
+              "render fewer pixels, upscale them smartly, and spend your FPS on the settings "
+              "you actually notice.")
+
+        card = tk.Frame(inner, bg=PANEL_2, padx=14, pady=12)
+        card.pack(fill="x", pady=(12, 0))
+        tk.Frame(card, bg=ACCENT, width=4).pack(side="left", fill="y", padx=(0, 12))
+        body = tk.Frame(card, bg=PANEL_2)
+        body.pack(side="left", fill="x", expand=True)
+        tk.Label(body, text=render.headline, font=FONT_BIG, fg=TEXT, bg=PANEL_2,
+                 anchor="w", justify="left", wraplength=700).pack(fill="x")
+        muted(body, render.detail, bg=PANEL_2, width=700)
+
+        heading("Upscaling & sharpening for your laptop")
+        rank_text = {"best": ("BEST", GOOD), "good": ("GOOD", WARN), "alt": ("ALSO", MUTED)}
+        for up in graphics.upscalers_for(gpu):
+            c = tk.Frame(inner, bg=PANEL_2, padx=12, pady=10)
+            c.pack(fill="x", pady=4)
+            top = tk.Frame(c, bg=PANEL_2)
+            top.pack(fill="x")
+            label, colour = rank_text[up.rank]
+            tk.Label(top, text=label, font=FONT_SMALL, fg=colour, bg=PANEL_2,
+                     width=5, anchor="w").pack(side="left")
+            tk.Label(top, text=up.name, font=FONT_BOLD, fg=TEXT, bg=PANEL_2).pack(side="left")
+            if up.link:
+                text, url = up.link
+                _button(top, text, lambda u=url: webbrowser.open(u)).pack(side="right")
+            muted(c, up.summary, bg=PANEL_2, width=700)
+            steps = "\n".join(f"{i}. {s}" for i, s in enumerate(up.steps, 1))
+            tk.Label(c, text=steps, font=FONT_SMALL, fg=TEXT, bg=PANEL_2, anchor="w",
+                     justify="left", wraplength=700).pack(fill="x", pady=(6, 0))
+
+        heading("Game settings: turn down from the top")
+        muted(inner, "Ordered by how much FPS you get back for how little you'd notice. "
+              "Lower the first few before touching resolution.")
+        table = tk.Frame(inner, bg=PANEL)
+        table.pack(fill="x", pady=(8, 0))
+        cost_colour = {"Huge": GOOD, "High": GOOD, "Medium": WARN}
+        for col, title in enumerate(("Setting", "FPS cost", "Do this")):
+            tk.Label(table, text=title, font=FONT_SMALL, fg=MUTED, bg=PANEL,
+                     anchor="w").grid(row=0, column=col, sticky="w", padx=(0, 14), pady=(0, 4))
+        for row, tip in enumerate(graphics.settings_guide(gpu, info.ram_gb), start=1):
+            tk.Label(table, text=tip.setting, font=FONT_BOLD, fg=TEXT, bg=PANEL, anchor="w",
+                     justify="left", wraplength=200).grid(row=row, column=0, sticky="nw",
+                                                          padx=(0, 14), pady=3)
+            tk.Label(table, text=tip.fps_cost, font=FONT_SMALL,
+                     fg=cost_colour.get(tip.fps_cost, MUTED), bg=PANEL, anchor="w",
+                     justify="left", wraplength=110).grid(row=row, column=1, sticky="nw",
+                                                          padx=(0, 14), pady=3)
+            tk.Label(table, text=tip.action, font=FONT_SMALL, fg=MUTED, bg=PANEL, anchor="w",
+                     justify="left", wraplength=400).grid(row=row, column=2, sticky="nw",
+                                                          pady=3)
+        table.columnconfigure(2, weight=1)
 
     def _build_tweaks(self) -> None:
         tab = self.tab_tweaks
@@ -380,7 +466,7 @@ class R3cketApp:
         info = system.detect(self.backend)
         plugged, _ = system.battery_status()
         advice = system.advise(info, plugged)
-        self.root.after(0, lambda: self._show_system(info, advice))
+        self.root.after(0, lambda: (self._show_system(info, advice), self._show_graphics(info)))
 
     def _show_system(self, info, advice) -> None:
         lines = [

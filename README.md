@@ -20,6 +20,22 @@ help games, every one of them backed up and undoable.
 | 🎯 | **Per-game: dedicated GPU** — forces Nvidia/AMD instead of Intel graphics on dual-GPU laptops | High (on those laptops) |
 | 🔺 | **Per-game: High CPU priority** (never Realtime, which can freeze Windows) | Low–Medium |
 
+### Better graphics, not just more FPS
+
+The **Graphics** tab detects your GPU and screen and tells you how to get the
+best picture your laptop can afford:
+
+- **Render resolution** — e.g. render at 1280x720 on a 1080p screen with
+  integrated graphics, then upscale. Low-res screens (1366x768) stay native.
+- **Upscalers that fit your hardware**, ranked, with step-by-step setup: the
+  game's own FSR / XeSS / DLSS (RTX only), NVIDIA Image Scaling, Radeon Super
+  Resolution (RX 5000+ / Ryzen 6000+ graphics) or Radeon Image Sharpening,
+  [Magpie](https://github.com/Blinue/Magpie) (free, great on Intel) and Lossless
+  Scaling.
+- **Which settings to sacrifice first** — shadows, volumetrics, AA and AO cost
+  the most FPS for the least visible difference; textures and anisotropic
+  filtering are nearly free and keep games looking good.
+
 The **My laptop** tab reads your hardware and gives tailored advice — charger,
 RAM, hard drive vs SSD, integrated graphics settings, heat — because on old
 hardware those matter more than any software tweak.
@@ -67,6 +83,7 @@ r3cket/
   tweaks.py        the tweak catalogue (each one reversible)
   processes.py     background apps & game priority (psutil)
   system.py        hardware detection & advice
+  graphics.py      upscaler, render-resolution & settings advice
   state.py         backup + settings (JSON, atomic writes)
   platform_win.py  registry/command backend + FakeBackend for tests
 ```
